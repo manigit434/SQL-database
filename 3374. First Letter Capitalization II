@@ -1,0 +1,48 @@
+Problem:
+
+Table: user_content
+
++-------------+---------+
+| Column Name | Type    |
++-------------+---------+
+| content_id  | int     |
+| content_text| varchar |
++-------------+---------+
+content_id is the unique key for this table.
+Each row contains a unique ID and the corresponding text content.
+Write a solution to transform the text in the content_text column by applying the following rules:
+
+Convert the first letter of each word to uppercase and the remaining letters to lowercase
+Special handling for words containing special characters:
+For words connected with a hyphen -, both parts should be capitalized (e.g., top-rated → Top-Rated)
+All other formatting and spacing should remain unchanged
+Return the result table that includes both the original content_text and the modified text following the above rules.
+
+Solution:
+
+WITH RECURSIVE seq AS (
+    SELECT 1 AS pos
+    UNION ALL
+    SELECT pos + 1
+    FROM seq
+    WHERE pos < 1000
+)
+
+SELECT
+    u.content_id,
+    u.content_text AS original_text,
+    GROUP_CONCAT(
+        CASE
+            WHEN s.pos = 1 THEN UPPER(SUBSTRING(LOWER(u.content_text), s.pos, 1))
+            WHEN SUBSTRING(LOWER(u.content_text), s.pos - 1, 1) IN (' ', '-')
+                THEN UPPER(SUBSTRING(LOWER(u.content_text), s.pos, 1))
+            ELSE SUBSTRING(LOWER(u.content_text), s.pos, 1)
+        END
+        ORDER BY s.pos
+        SEPARATOR ''
+    ) AS converted_text
+FROM user_content u
+JOIN seq s
+    ON s.pos <= LENGTH(u.content_text)
+GROUP BY u.content_id, u.content_text
+ORDER BY u.content_id;
