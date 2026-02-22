@@ -1,0 +1,74 @@
+Problem:
+
+Table: Employees
+
++----------------+---------+
+| Column Name    | Type    | 
++----------------+---------+
+| employee_id    | int     |
+| employee_name  | varchar |
+| manager_id     | int     |
+| salary         | int     |
+| department     | varchar |
++----------------+----------+
+employee_id is the unique key for this table.
+Each row contains information about an employee, including their ID, name, their manager's ID, salary, and department.
+manager_id is null for the top-level manager (CEO).
+Write a solution to analyze the organizational hierarchy and answer the following:
+
+Hierarchy Levels: For each employee, determine their level in the organization (CEO is level 1, employees reporting directly to the CEO are level 2, and so on).
+Team Size: For each employee who is a manager, count the total number of employees under them (direct and indirect reports).
+Salary Budget: For each manager, calculate the total salary budget they control (sum of salaries of all employees under them, including indirect reports, plus their own salary).
+Return the result table ordered by the result ordered by level in ascending order, then by budget in descending order, and finally by employee_name in ascending order.
+
+Solution:
+WITH RECURSIVE Hierarchy AS (
+    -- Base Case: Identify the CEO (Level 1)
+    SELECT 
+        employee_id, 
+        employee_name, 
+        manager_id, 
+        salary, 
+        1 AS level,
+        CAST(employee_id AS CHAR(200)) AS path
+    FROM Employees
+    WHERE manager_id IS NULL
+    
+    UNION ALL
+    
+    -- Recursive Step: Find subordinates and increment level
+    SELECT 
+        e.employee_id, 
+        e.employee_name, 
+        e.manager_id, 
+        e.salary, 
+        h.level + 1,
+        CONCAT(h.path, ',', e.employee_id)
+    FROM Employees e
+    INNER JOIN Hierarchy h ON e.manager_id = h.employee_id
+),
+Descendants AS (
+    -- Map every manager to every one of their direct and indirect reports
+    -- A manager 'A' is linked to 'B' if A's ID is in B's hierarchy path
+    SELECT 
+        h1.employee_id AS manager_id,
+        h2.employee_id AS report_id,
+        h2.salary AS report_salary
+    FROM Hierarchy h1
+    JOIN Hierarchy h2 ON FIND_IN_SET(h1.employee_id, h2.path) > 0
+    WHERE h1.employee_id != h2.employee_id
+)
+SELECT 
+    h.employee_id,
+    h.employee_name,
+    h.level,
+    COUNT(d.report_id) AS team_size,
+    h.salary + IFNULL(SUM(d.report_salary), 0) AS budget
+FROM Hierarchy h
+LEFT JOIN Descendants d ON h.employee_id = d.manager_id
+GROUP BY 
+    h.employee_id, h.employee_name, h.level, h.salary
+ORDER BY 
+    h.level ASC, 
+    budget DESC, 
+    h.employee_name ASC;
