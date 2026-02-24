@@ -1,0 +1,129 @@
+Problem:
+
+Table: students
+
++--------------+---------+
+| Column Name  | Type    |
++--------------+---------+
+| student_id   | int     |
+| student_name | varchar |
+| major        | varchar |
++--------------+---------+
+student_id is the unique identifier for this table.
+Each row contains information about a student and their academic major.
+Table: study_sessions
+
++---------------+---------+
+| Column Name   | Type    |
++---------------+---------+
+| session_id    | int     |
+| student_id    | int     |
+| subject       | varchar |
+| session_date  | date    |
+| hours_studied | decimal |
++---------------+---------+
+session_id is the unique identifier for this table.
+Each row represents a study session by a student for a specific subject.
+Write a solution to find students who follow the Study Spiral Pattern - students who consistently study multiple subjects in a rotating cycle.
+
+A Study Spiral Pattern means a student studies at least 3 different subjects in a repeating sequence
+The pattern must repeat for at least 2 complete cycles (minimum 6 study sessions)
+Sessions must be consecutive dates with no gaps longer than 2 days between sessions
+Calculate the cycle length (number of different subjects in the pattern)
+Calculate the total study hours across all sessions in the pattern
+Only include students with cycle length of at least 3 subjects
+Return the result table ordered by cycle length in descending order, then by total study hours in descending order.
+
+Solution:
+
+WITH ordered_sessions AS (
+    SELECT
+        ss.*,
+        LAG(session_date) OVER (
+            PARTITION BY student_id
+            ORDER BY session_date
+        ) AS prev_date
+    FROM study_sessions ss
+),
+valid_sessions AS (
+    -- keep only sessions where gap with previous session ≤ 2 days
+    SELECT *
+    FROM ordered_sessions
+    WHERE prev_date IS NULL
+       OR DATEDIFF(session_date, prev_date) <= 2
+),
+numbered AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY student_id
+            ORDER BY session_date
+        ) AS rn
+    FROM valid_sessions
+),
+possible_cycles AS (
+    -- try every possible cycle length (>=3)
+    SELECT DISTINCT
+        n1.student_id,
+        cycle_len
+    FROM numbered n1
+    JOIN (
+        SELECT 3 AS cycle_len UNION ALL SELECT 4 UNION ALL SELECT 5
+        UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8
+        UNION ALL SELECT 9 UNION ALL SELECT 10
+    ) c
+    WHERE EXISTS (
+        -- ensure at least 2 complete cycles
+        SELECT 1
+        FROM numbered n2
+        WHERE n2.student_id = n1.student_id
+        GROUP BY n2.student_id
+        HAVING COUNT(*) >= 2 * c.cycle_len
+    )
+),
+valid_cycles AS (
+    -- verify repeating subject pattern
+    SELECT
+        p.student_id,
+        p.cycle_len
+    FROM possible_cycles p
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM numbered n
+        JOIN numbered n_prev
+          ON n.student_id = n_prev.student_id
+         AND n.rn = n_prev.rn + p.cycle_len
+        WHERE n.student_id = p.student_id
+          AND n.subject <> n_prev.subject
+    )
+),
+best_cycle AS (
+    -- choose largest valid cycle per student
+    SELECT
+        student_id,
+        MAX(cycle_len) AS cycle_length
+    FROM valid_cycles
+    GROUP BY student_id
+    HAVING MAX(cycle_len) >= 3
+),
+final_calc AS (
+    SELECT
+        b.student_id,
+        b.cycle_length,
+        SUM(n.hours_studied) AS total_study_hours
+    FROM best_cycle b
+    JOIN numbered n
+      ON b.student_id = n.student_id
+    GROUP BY b.student_id, b.cycle_length
+)
+SELECT
+    s.student_id,
+    s.student_name,
+    s.major,
+    f.cycle_length,
+    f.total_study_hours
+FROM final_calc f
+JOIN students s
+  ON s.student_id = f.student_id
+ORDER BY f.cycle_length DESC,
+         f.total_study_hours DESC;
