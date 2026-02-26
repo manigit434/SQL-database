@@ -1,0 +1,47 @@
+Problem:
+
+Table: Scores
+
++-------------+---------+
+| Column Name | Type    |
++-------------+---------+
+| student_id  | int     |
+| subject     | varchar |
+| score       | int     |
+| exam_date   | varchar |
++-------------+---------+
+(student_id, subject, exam_date) is the primary key for this table.
+Each row contains information about a student's score in a specific subject on a particular exam date. score is between 0 and 100 (inclusive).
+Write a solution to find the students who have shown improvement. A student is considered to have shown improvement if they meet both of these conditions:
+
+Have taken exams in the same subject on at least two different dates
+Their latest score in that subject is higher than their first score
+Return the result table ordered by student_id, subject in ascending order.
+
+Solution:
+WITH RankedScores AS (
+    SELECT 
+        student_id, 
+        subject, 
+        score,
+        -- Rank 1 is the first exam
+        ROW_NUMBER() OVER(PARTITION BY student_id, subject ORDER BY exam_date ASC) as first_rank,
+        -- Rank 1 is the latest exam
+        ROW_NUMBER() OVER(PARTITION BY student_id, subject ORDER BY exam_date DESC) as latest_rank
+    FROM Scores
+)
+SELECT 
+    f.student_id, 
+    f.subject, 
+    f.score AS first_score, 
+    l.score AS latest_score
+FROM RankedScores f
+JOIN RankedScores l 
+    ON f.student_id = l.student_id 
+    AND f.subject = l.subject
+WHERE f.first_rank = 1     -- Get the first record
+  AND l.latest_rank = 1    -- Get the latest record
+  AND f.score < l.score    -- Condition: improvement shown
+  -- Implicitly handles "at least two exams" because if there's only one, 
+  -- f.score < l.score will be 90 < 90 (false)
+ORDER BY student_id, subject;
