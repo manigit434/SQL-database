@@ -1,0 +1,67 @@
+Problem:
+
+Table: drivers
+
++-------------+---------+
+| Column Name | Type    |
++-------------+---------+
+| driver_id   | int     |
+| driver_name | varchar |
++-------------+---------+
+driver_id is the unique identifier for this table.
+Each row contains information about a driver.
+Table: trips
+
++---------------+---------+
+| Column Name   | Type    |
++---------------+---------+
+| trip_id       | int     |
+| driver_id     | int     |
+| trip_date     | date    |
+| distance_km   | decimal |
+| fuel_consumed | decimal |
++---------------+---------+
+trip_id is the unique identifier for this table.
+Each row represents a trip made by a driver, including the distance traveled and fuel consumed for that trip.
+Write a solution to find drivers whose fuel efficiency has improved by comparing their average fuel efficiency in the first half of the year with the second half of the year.
+
+Calculate fuel efficiency as distance_km / fuel_consumed for each trip
+First half: January to June, Second half: July to December
+Only include drivers who have trips in both halves of the year
+Calculate the efficiency improvement as (second_half_avg - first_half_avg)
+Round all results to 2 decimal places
+Return the result table ordered by efficiency improvement in descending order, then by driver name in ascending order.
+
+Solution:
+
+WITH TripEfficiency AS (
+    -- Step 1: Calculate efficiency for every trip and identify the half of the year
+    SELECT 
+        driver_id,
+        MONTH(trip_date) AS trip_month,
+        (distance_km / fuel_consumed) AS efficiency
+    FROM trips
+),
+HalflyAverages AS (
+    -- Step 2: Calculate average efficiency per driver for each half
+    -- Using CASE to separate H1 and H2
+    SELECT 
+        driver_id,
+        AVG(CASE WHEN trip_month BETWEEN 1 AND 6 THEN efficiency END) AS first_half_avg,
+        AVG(CASE WHEN trip_month BETWEEN 7 AND 12 THEN efficiency END) AS second_half_avg
+    FROM TripEfficiency
+    GROUP BY driver_id
+)
+-- Step 3: Join with drivers table, filter, and calculate improvement
+SELECT 
+    d.driver_id,
+    d.driver_name,
+    ROUND(h.first_half_avg, 2) AS first_half_avg,
+    ROUND(h.second_half_avg, 2) AS second_half_avg,
+    ROUND(h.second_half_avg - h.first_half_avg, 2) AS efficiency_improvement
+FROM drivers d
+JOIN HalflyAverages h ON d.driver_id = h.driver_id
+WHERE h.first_half_avg IS NOT NULL 
+  AND h.second_half_avg IS NOT NULL
+  AND h.second_half_avg > h.first_half_avg
+ORDER BY efficiency_improvement DESC, d.driver_name ASC;
