@@ -1,0 +1,74 @@
+Problem:
+
+Table: books
+
++-------------+---------+
+| Column Name | Type    |
++-------------+---------+
+| book_id     | int     |
+| title       | varchar |
+| author      | varchar |
+| genre       | varchar |
+| pages       | int     |
++-------------+---------+
+book_id is the unique ID for this table.
+Each row contains information about a book including its genre and page count.
+Table: reading_sessions
+
++----------------+---------+
+| Column Name    | Type    |
++----------------+---------+
+| session_id     | int     |
+| book_id        | int     |
+| reader_name    | varchar |
+| pages_read     | int     |
+| session_rating | int     |
++----------------+---------+
+session_id is the unique ID for this table.
+Each row represents a reading session where someone read a portion of a book. session_rating is on a scale of 1-5.
+Write a solution to find books that have polarized opinions - books that receive both very high ratings and very low ratings from different readers.
+
+A book has polarized opinions if it has at least one rating ≥ 4 and at least one rating ≤ 2
+Only consider books that have at least 5 reading sessions
+Calculate the rating spread as (highest_rating - lowest_rating)
+Calculate the polarization score as the number of extreme ratings (ratings ≤ 2 or ≥ 4) divided by total sessions
+Only include books where polarization score ≥ 0.6 (at least 60% extreme ratings)
+Return the result table ordered by polarization score in descending order, then by title in descending order.
+The polarization score should be rounded to 2 decimal places.
+
+Solution:
+
+WITH BookStats AS (
+    -- Step 1: Calculate metrics for each book from reading sessions
+    SELECT 
+        book_id,
+        COUNT(*) AS total_sessions,
+        MIN(session_rating) AS min_rating,
+        MAX(session_rating) AS max_rating,
+        -- Count ratings >= 4
+        SUM(CASE WHEN session_rating >= 4 THEN 1 ELSE 0 END) AS high_ratings,
+        -- Count ratings <= 2
+        SUM(CASE WHEN session_rating <= 2 THEN 1 ELSE 0 END) AS low_ratings
+    FROM reading_sessions
+    GROUP BY book_id
+    -- Requirement: At least 5 reading sessions
+    HAVING total_sessions >= 5
+)
+-- Step 2: Filter for polarized criteria and join with book details
+SELECT 
+    b.book_id,
+    b.title,
+    b.author,
+    b.genre,
+    b.pages,
+    (s.max_rating - s.min_rating) AS rating_spread,
+    ROUND((s.high_ratings + s.low_ratings) / s.total_sessions, 2) AS polarization_score
+FROM books b
+JOIN BookStats s ON b.book_id = s.book_id
+WHERE 
+    s.high_ratings > 0              -- At least one rating >= 4
+    AND s.low_ratings > 0           -- At least one rating <= 2
+    AND ((s.high_ratings + s.low_ratings) / s.total_sessions) >= 0.6 -- Polarization score >= 0.6
+ORDER BY 
+    polarization_score DESC, 
+    b.title DESC;
