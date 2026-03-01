@@ -1,0 +1,65 @@
+Problem:
+
+Table: reactions
+
++--------------+---------+
+| Column Name  | Type    |
++--------------+---------+
+| user_id      | int     |
+| content_id   | int     |
+| reaction     | varchar |
++--------------+---------+
+(user_id, content_id) is the primary key (unique value) for this table.
+Each row represents a reaction given by a user to a piece of content.
+Write a solution to identify emotionally consistent users based on the following requirements:
+
+For each user, count the total number of reactions they have given.
+Only include users who have reacted to at least 5 different content items.
+A user is considered emotionally consistent if at least 60% of their reactions are of the same type.
+Return the result table ordered by reaction_ratio in descending order and then by user_id in ascending order.
+
+Note:
+
+reaction_ratio should be rounded to 2 decimal places
+
+Solution:
+
+WITH UserReactionCounts AS (
+    SELECT 
+        user_id,
+        reaction,
+        COUNT(*) AS reaction_count
+    FROM reactions
+    GROUP BY user_id, reaction
+),
+UserTotals AS (
+    SELECT 
+        user_id,
+        COUNT(*) AS total_reactions,
+        COUNT(DISTINCT content_id) AS distinct_contents
+    FROM reactions
+    GROUP BY user_id
+),
+DominantReaction AS (
+    SELECT 
+        urc.user_id,
+        urc.reaction AS dominant_reaction,
+        urc.reaction_count,
+        ut.total_reactions,
+        ut.distinct_contents,
+        ROW_NUMBER() OVER (
+            PARTITION BY urc.user_id 
+            ORDER BY urc.reaction_count DESC, urc.reaction ASC
+        ) AS rn
+    FROM UserReactionCounts urc
+    JOIN UserTotals ut ON urc.user_id = ut.user_id
+)
+SELECT 
+    user_id,
+    dominant_reaction,
+    ROUND(reaction_count * 1.0 / total_reactions, 2) AS reaction_ratio
+FROM DominantReaction
+WHERE rn = 1
+  AND distinct_contents >= 5
+  AND (reaction_count * 1.0 / total_reactions) >= 0.60
+ORDER BY reaction_ratio DESC, user_id ASC;
