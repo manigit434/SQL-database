@@ -1,0 +1,58 @@
+Problem:
+
+Table: subscription_events
+
++------------------+---------+
+| Column Name      | Type    | 
++------------------+---------+
+| event_id         | int     |
+| user_id          | int     |
+| event_date       | date    |
+| event_type       | varchar |
+| plan_name        | varchar |
+| monthly_amount   | decimal |
++------------------+---------+
+event_id is the unique identifier for this table.
+event_type can be start, upgrade, downgrade, or cancel.
+plan_name can be basic, standard, premium, or NULL (when event_type is cancel).
+monthly_amount represents the monthly subscription cost after this event.
+For cancel events, monthly_amount is 0.
+Write a solution to Find Churn Risk Customers - users who show warning signs before churning. A user is considered churn risk customer if they meet ALL the following criteria:
+
+Currently have an active subscription (their last event is not cancel).
+Have performed at least one downgrade in their subscription history.
+Their current plan revenue is less than 50% of their historical maximum plan revenue.
+Have been a subscriber for at least 60 days.
+Return the result table ordered by days_as_subscriber in descending order, then by user_id in ascending order.
+
+Solution:
+
+WITH UserStats AS (
+    SELECT 
+        user_id,
+        MIN(event_date) AS start_date,
+        MAX(event_date) AS last_date,
+        MAX(CASE WHEN event_type = 'cancel' THEN 1 ELSE 0 END) AS has_cancel,
+        MAX(CASE WHEN event_type = 'downgrade' THEN 1 ELSE 0 END) AS has_downgrade,
+        MAX(monthly_amount) AS max_historical_amount,
+        SUBSTRING_INDEX(
+            GROUP_CONCAT(plan_name ORDER BY event_date DESC), ',', 1
+        ) AS current_plan,
+        SUBSTRING_INDEX(
+            GROUP_CONCAT(monthly_amount ORDER BY event_date DESC), ',', 1
+        ) AS current_monthly_amount
+    FROM subscription_events
+    GROUP BY user_id
+)
+SELECT 
+    user_id,
+    current_plan,
+    CAST(current_monthly_amount AS DECIMAL(10,2)) AS current_monthly_amount,
+    max_historical_amount,
+    DATEDIFF(last_date, start_date) AS days_as_subscriber
+FROM UserStats
+WHERE has_cancel = 0
+  AND has_downgrade = 1
+  AND current_monthly_amount < 0.5 * max_historical_amount
+  AND DATEDIFF(last_date, start_date) >= 60
+ORDER BY days_as_subscriber DESC, user_id ASC;
