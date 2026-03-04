@@ -1,0 +1,15 @@
+-- ==================================================
+-- Problem: 178. Rank Scores
+-- Difficulty: Medium
+-- Concepts: Subquery, COUNT(DISTINCT), Ranking, ORDER BY
+-- ==================================================
+
+SELECT
+    s1.score,
+    (
+        SELECT COUNT(DISTINCT s2.score)
+        FROM Scores s2
+        WHERE s2.score > s1.score
+    ) + 1 AS `rank`
+FROM Scores s1
+ORDER BY s1.score DESC;
